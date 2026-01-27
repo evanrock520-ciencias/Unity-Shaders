@@ -11,3 +11,8 @@ I'm so interested at non photo-realistic rendering. So these shaders will be rel
 ### Toon Shader
 
 ![Preview](docs/images/toon.png)
+
+---
+
+![Preview](docs/images/sphere_cylinder.png)
+
