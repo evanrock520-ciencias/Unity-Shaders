@@ -9,6 +9,7 @@ public class PlayerController : MonoBehaviour
     [Header("Movement")]
     public float moveSpeed = 5f;
     public float gravity = -9.81f;
+    public float jumpHeight = 1.2f; 
 
     [Header("Mouse Look")]
     public float mouseSensitivity = 0.1f;
@@ -52,17 +53,23 @@ public class PlayerController : MonoBehaviour
     {
         Vector2 moveInput = input.Player.Move.ReadValue<Vector2>();
 
-        Vector3 move =
-            transform.right * moveInput.x +
-            transform.forward * moveInput.y;
+        Vector3 moveDirection = transform.right * moveInput.x + transform.forward * moveInput.y;
 
         if (controller.isGrounded && verticalVelocity < 0f)
+        {
             verticalVelocity = -2f;
+        }
+
+        if (input.Player.Jump.triggered && controller.isGrounded)
+        {
+            verticalVelocity = Mathf.Sqrt(jumpHeight * -2f * gravity);
+        }
 
         verticalVelocity += gravity * Time.deltaTime;
-        move.y = verticalVelocity;
 
-        controller.Move(move * moveSpeed * Time.deltaTime);
+        Vector3 finalVelocity = moveDirection * moveSpeed;
+        finalVelocity.y = verticalVelocity;
+        controller.Move(finalVelocity * Time.deltaTime);
     }
 
     void HandleMouseLook()

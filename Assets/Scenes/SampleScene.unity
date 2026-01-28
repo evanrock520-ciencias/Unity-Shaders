@@ -790,6 +790,7 @@ MonoBehaviour:
   cameraPivot: {fileID: 330585546}
   moveSpeed: 5
   gravity: -9.81
+  jumpHeight: 1.2
   mouseSensitivity: 4
   maxLookAngle: 80
 --- !u!143 &1378898097
