@@ -16,7 +16,11 @@ Shader "Custom/Silk"
         _SpecularThreshold ("Specular Threshold", Range(0.0, 1.0)) = 0.8
         _SpecularSoftness ("Specular Softness", Range(0.0, 1.0)) = 0.05
         _AnisoOffset ("Aniso Position", Range(-1, 1)) = 0.0
-            
+
+        [Header(Anisotropy)]
+        _AnisoMap("Aniso Direction Map (RG)", 2D) = "gray" {}
+        _AnisoStrength("Aniso Strength", Range(0,2)) = 1
+                    
         [Header(Rim Light)]
         _RimColor ("Rim Color", Color) = (1, 1, 1, 1)
         _RimThreshold ("Rim Threshold", Range(0, 1)) = 0.5
@@ -143,6 +147,10 @@ Shader "Custom/Silk"
             TEXTURE2D(_BaseMap);
             SAMPLER(sampler_BaseMap);
 
+            TEXTURE2D(_AnisoMap);
+            SAMPLER(sampler_AnisoMap);
+
+
             CBUFFER_START(UnityPerMaterial)
                 half4 _BaseColor;
                 float4 _BaseMap_ST;
@@ -159,6 +167,7 @@ Shader "Custom/Silk"
                 float _RimThreshold;
                 float _ToonSteps;
                 float _ToonSmoothness;
+                float _AnisoStrength;
             CBUFFER_END
 
             Varyings vert(Attributes IN)
@@ -186,7 +195,10 @@ Shader "Custom/Silk"
             {
                 Light mainLight = GetMainLight(IN.shadowCoord); 
                 float3 viewDir = normalize(_WorldSpaceCameraPos - IN.positionWS);
-                float3 normal = normalize(IN.normalWS); 
+                float2 fiberUV = IN.uv * 40 + _Time.y * float2(0.1,0.05);
+                float fiber = sin((fiberUV.x + fiberUV.y) * 20) * 0.05;
+                float3 normal = normalize(IN.normalWS);
+                normal = normalize(normal + fiber); 
                 float3 tangent = normalize(IN.tangentWS);
                 float3 lightDir = normalize(mainLight.direction); 
                 float3 halfVec = normalize(viewDir + lightDir);
@@ -198,22 +210,33 @@ Shader "Custom/Silk"
                 float lightIntensity = NdotL * mainLight.shadowAttenuation; 
                 float toonLight = ToonStep(lightIntensity, _ToonSteps, _ToonSmoothness);
 
-                float TdotH = dot(tangent, halfVec);
+                float2 flow = SAMPLE_TEXTURE2D(_AnisoMap, sampler_AnisoMap, IN.uv).rg;
+                flow = flow * 2 - 1; 
+
+                float3 bitangent = normalize(cross(normal, tangent));
+                float3 flowDir = normalize(flow.x * tangent * _AnisoStrength + flow.y * bitangent);
+
+                float TdotH = dot(flowDir, halfVec);
                 TdotH += _AnisoOffset;
 
                 float anisoDist = sqrt(1.0 - (TdotH * TdotH)); 
                 anisoDist = max(0, anisoDist);
 
-                float shine = pow(anisoDist, _Glossiness);
+                float primary = pow(anisoDist, _Glossiness);
+                float secondary = pow(anisoDist, _Glossiness * 0.25);
+
+                float shine =  primary * 0.7 + secondary * 0.3;
                 float toonShine = smoothstep(_SpecularThreshold - _SpecularSoftness, _SpecularThreshold + _SpecularSoftness, shine) * toonLight;
 
-                float fresnel = 1.0 - NdotV;
-                float3 toonFresnel = smoothstep(_RimThreshold - _RimSoftness, _RimThreshold + _RimSoftness, fresnel) * _RimColor.rgb * toonLight;
+                float fresnel = pow(1 - NdotV, 4);
+                float3 specColor = lerp(_SpecularColor.rgb, _RimColor.rgb, fresnel);
 
                 half4 albedo = SAMPLE_TEXTURE2D(_BaseMap, sampler_BaseMap, IN.uv) * _BaseColor; 
                 
                 float3 diffuseColor = lerp(albedo.rgb * _ShadowColor.rgb, albedo.rgb, toonLight);
-                float3 finalColor = diffuseColor + (toonShine * _SpecularColor.rgb) + toonFresnel; 
+                float3 finalColor = diffuseColor + toonShine * specColor;
+                float sheen = pow(1 - NdotV, 6) * toonLight;
+                finalColor += sheen * _RimColor.rgb * 0.3;
 
                 return half4(finalColor, albedo.a);
             }
